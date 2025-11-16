@@ -1,0 +1,2209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ffffff">
+
+    <title>To-Do List App (v17 - LocalStorage)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Prompt', 'sans-serif'] },
+                    colors: { 
+                        'brand': { 
+                            50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 
+                            500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' 
+                        }, 
+                        'accent': { 
+                            50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669' 
+                        },
+                        'priority': { 
+                            50: '#fffbeb', 100: '#fef3c7', 500: '#f59e0b', 600: '#d97706' 
+                        },
+                        'ai': { 
+                            50: '#f5f3ff', 100: '#ede9fe', 500: '#8b5cf6', 600: '#7c3aed' 
+                        },
+                        'danger': {
+                            50: '#fff1f2', 100: '#ffe4e6', 500: '#ef4444', 600: '#dc2626'
+                        }
+                    },
+                    animation: {
+                        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'scale-in': 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'pulse-dot': 'pulseDot 1.4s infinite ease-in-out both',
+                        'pop': 'pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                    },
+                    keyframes: {
+                        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+                        scaleIn: { '0%': { transform: 'scale(0.9)', opacity: '0' }, '100%': { transform: 'scale(1)', opacity: '1' } },
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        pulseDot: {
+                            '0%, 80%, 100%': { transform: 'scale(0)', opacity: 0.5 },
+                            '40%': { transform: 'scale(1.0)', opacity: 1 }
+                        },
+                        pop: {
+                            '0%, 100%': { transform: 'scale(1)' },
+                            '50%': { transform: 'scale(1.3)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #f3f4f6; /* gray-100 */
+            height: 100dvh; width: 100vw; 
+            overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: 'Prompt', sans-serif; 
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        #app-shell { 
+            width: 100%; height: 100%; 
+            background: #ffffff; 
+            position: relative; overflow: hidden; 
+            display: flex; flex-direction: column; 
+        }
+        @media (min-width: 768px) { 
+            #app-shell { 
+                max-width: 420px; height: 850px; max-height: 90dvh; border-radius: 40px; 
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3); 
+                border: 1px solid #e5e7eb;
+            } 
+        }
+        
+        /* Bottom Nav */
+        .bottom-nav {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid #f3f4f6; /* gray-100 */
+            display: flex; position: relative; z-index: 50; padding: 8px 8px 0 8px;
+            padding-bottom: env(safe-area-inset-bottom, 8px);
+            box-shadow: 0 -5px 15px -3px rgba(0, 0, 0, 0.03);
+        }
+        .nav-item {
+            flex: 1; text-align: center; padding: 8px 5px 6px 5px;
+            font-size: 11px; font-weight: 600; color: #6b7280; /* gray-500 */
+            z-index: 2; cursor: pointer; transition: all 0.25s; border-radius: 10px;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            position: relative; 
+        }
+        .nav-item.active { 
+            color: #4f46e5; /* brand-600 */
+            background-color: transparent; 
+        }
+        #nav-chat.active { 
+            color: #7c3aed; /* ai-600 */
+            background-color: transparent;
+        }
+        .nav-item i { font-size: 16px; line-height: 1; }
+        .nav-item .active-dot {
+            width: 5px; height: 5px; background-color: transparent;
+            border-radius: 99px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: scale(0);
+        }
+        .nav-item.active .active-dot {
+            background-color: currentColor;
+            transform: scale(1);
+        }
+        .nav-badge {
+            position: absolute;
+            top: 4px;
+            right: calc(50% - 22px);
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #dc2626; /* danger-600 */
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 99px;
+            border: 2px solid white;
+            transform: scale(1);
+            transition: all 0.2s;
+        }
+        .nav-badge.hidden {
+            transform: scale(0);
+        }
+
+        /* Task Item (v14 style) */
+        .task-item {
+            background-color: white;
+            padding: 16px; 
+            border-bottom: 1px solid #f3f4f6; /* gray-100 */
+            display: flex;
+            align-items: flex-start;
+            gap: 12px; 
+            animation: fadeIn 0.3s ease-out; 
+        }
+        .task-item-checkbox {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: -2px;
+        }
+        .task-item.completed .task-text,
+        .task-item.completed .task-subtitle {
+            text-decoration: line-through; 
+            color: #9ca3af; /* gray-400 */
+        }
+        .task-text {
+            font-size: 14px; 
+            font-weight: 500;
+            line-height: 1.5;
+            color: #1f2937; /* gray-800 */
+        }
+        .task-subtitle {
+            font-size: 12px;
+            color: #6b7280; /* gray-500 */
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .task-status-badge {
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .task-status-overdue {
+            background-color: #ffe4e6; /* danger-100 */
+            color: #dc2626; /* danger-600 */
+        }
+        .task-status-today {
+            background-color: #e0e7ff; /* brand-100 */
+            color: #4f46e5; /* brand-600 */
+        }
+        
+        .task-item.priority-high { 
+            background-color: #fffbeb; /* priority-50 */
+        }
+        
+        .animate-pop {
+            animation: pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* Modal */
+        .modal-backdrop {
+            position: fixed; inset: 0; z-index: 1000;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.3s ease-out;
+        }
+        .modal-box {
+            position: fixed; z-index: 1001;
+            bottom: 0; left: 0; right: 0;
+            background-color: #f8fafc; /* slate-50 */
+            border-top-left-radius: 24px;
+            border-top-right-radius: 24px;
+            padding: 24px;
+            padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
+            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #guide-modal-box, #calendar-sheet-modal {
+            display: flex;
+            flex-direction: column;
+            max-height: 85dvh;
+        }
+        #guide-modal-content, #calendar-sheet-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        #calendar-sheet-list .task-item {
+             border-bottom: 1px solid #f3f4f6;
+             padding-left: 16px;
+        }
+        #calendar-sheet-list .task-item:first-child {
+            border-top: 0;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+        #calendar-sheet-list .task-item:last-child {
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            border-bottom: 0;
+        }
+
+
+        @media (min-width: 768px) {
+            .modal-box {
+                left: 50%; bottom: auto; top: 50%;
+                transform: translate(-50%, -50%);
+                max-width: 420px; width: 100%;
+                border-radius: 24px;
+                animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+        }
+        
+        .form-label { display: block; text-transform: uppercase; font-size: 11px; font-weight: 700; color: #4b5563; /* gray-600 */ margin-bottom: 6px; letter-spacing: 0.5px; }
+        .form-input { 
+            width: 100%; background: white; border: 1px solid #d1d5db; /* gray-300 */ 
+            border-radius: 12px; padding: 10px 14px; font-size: 14px; color: #1f2937; /* gray-800 */
+            transition: all 0.2s; 
+        }
+        .form-input:focus { 
+            outline: none; border-color: #6366f1; /* brand-500 */
+            box-shadow: 0 0 0 3px #e0e7ff; /* brand-100 */
+        }
+        #detail-view-notes, #detail-edit-notes {
+            line-height: 1.6;
+        }
+        
+        /* Segmented Control */
+        .segmented-control { background: #e5e7eb; /* gray-200 */ padding: 4px; border-radius: 12px; display: flex; position: relative; }
+        .segmented-item { flex: 1; text-align: center; padding: 6px; font-size: 12px; font-weight: 600; color: #4b5563; /* gray-600 */ z-index: 2; cursor: pointer; transition: color 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .segmented-item.active { color: #4f46e5; /* brand-600 */ }
+        .segmented-bg { 
+            position: absolute; top: 4px; bottom: 4px; left: 4px; 
+            width: calc(33.33% - 2.7px); background: white; border-radius: 8px; 
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+        }
+        /* View Mode Switcher */
+        .view-mode-switcher {
+            background: #f3f4f6; /* gray-100 */
+            padding: 4px;
+            border-radius: 12px;
+            display: inline-flex;
+        }
+        .view-mode-btn {
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #4b5563; /* gray-600 */
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+        .view-mode-btn.active {
+            background-color: white;
+            color: #4f46e5; /* brand-600 */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        /* Chat UI (v15 style) */
+        #view-chat { 
+            display: flex; flex-direction: column; height: 100%; padding: 0; 
+            background-color: #ffffff;
+        }
+        #chat-message-container { 
+            flex: 1; overflow-y: auto; padding: 16px; 
+            display: flex; flex-direction: column; gap: 12px; 
+        }
+        .chat-bubble { max-width: 80%; padding: 10px 16px; border-radius: 20px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
+        .chat-bubble-user { 
+            background-color: #4f46e5; /* brand-600 */ 
+            color: white; border-bottom-right-radius: 5px; align-self: flex-end; 
+        }
+        .chat-bubble-ai { 
+            background-color: #f3f4f6; /* gray-100 */
+            color: #374151; /* gray-700 */ 
+            border-bottom-left-radius: 5px; align-self: flex-start; 
+            display: flex; gap: 8px; align-items: center; 
+        }
+        .chat-bubble-ai i { color: #8b5cf6; } /* ai-500 */
+        
+        #chat-form-container {
+            background: #ffffff;
+            padding: 16px;
+            padding-bottom: calc(env(safe-area-inset-bottom, 0) + 16px);
+        }
+        #chat-input-row { 
+            display: flex; gap: 10px; align-items: flex-end; 
+            background-color: #f3f4f6; /* gray-100 */
+            border-radius: 99px;
+            padding: 8px 8px 8px 20px;
+        }
+        #chat-input { 
+            flex: 1; 
+            background-color: transparent;
+            border: none;
+            padding: 4px 0;
+            font-size: 15px; 
+            transition: all 0.2s; resize: none; max-height: 120px; 
+        }
+        #chat-input:focus { 
+            outline: none; 
+            box-shadow: none;
+        }
+        .chat-btn {
+            width: 40px; height: 40px; border-radius: 99px;
+            color: white; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: all 0.2s; 
+            background-color: #8b5cf6; /* ai-500 */
+        }
+        .chat-btn:hover { background-color: #7c3aed; } /* ai-600 */
+        .chat-btn:disabled { background-color: #c4b5fd; cursor: not-allowed; opacity: 0.7; }
+        #chat-input:disabled { background-color: transparent; }
+        
+        .chat-bubble-ai-typing { 
+            background-color: #f3f4f6; 
+            color: #374151; 
+            border-bottom-left-radius: 5px; align-self: flex-start; 
+            display: flex; gap: 10px; align-items: center; padding: 14px 16px; 
+            border-radius: 20px;
+        }
+
+        .typing-dot { width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: pulseDot 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        /* Floating Action Button (FAB) */
+        #fab-add-task {
+            position: fixed;
+            bottom: calc(env(safe-area-inset-bottom, 0) + 90px);
+            right: 24px;
+            width: 56px; 
+            height: 56px;
+            background-image: linear-gradient(to bottom right, #8b5cf6, #4f46e5); 
+            color: white;
+            border-radius: 99px;
+            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: scale(1);
+        }
+        #fab-add-task:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 25px -5px rgba(99, 102, 241, 0.6);
+        }
+        #fab-add-task i { font-size: 20px; }
+        #fab-add-task.hidden { transform: scale(0); }
+
+        /* Calendar View */
+        #calendar-grid { grid-template-rows: repeat(6, minmax(0, 1fr)); }
+        .calendar-day { text-align: center; padding: 8px 4px; font-size: 12px; font-weight: 600; color: #374151; position: relative; }
+        .calendar-day.other-month { color: #d1d5db; }
+        .calendar-day.today { background-color: #eef2ff; color: #4f46e5; border-radius: 99px; width: 28px; height: 28px; margin: 4px auto 0 auto; padding: 6px 4px; }
+        .calendar-day-header { font-size: 10px; font-weight: 700; color: #6b7280; padding: 8px 4px; text-align: center; text-transform: uppercase; }
+        .task-dot { width: 5px; height: 5px; border-radius: 99px; background-color: #6366f1; margin: 2px auto 0 auto; }
+        .task-dot.priority { background-color: #f59e0b; }
+        
+        /* Guide Modal Styles */
+        .guide-section { margin-bottom: 24px; }
+        .guide-section h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #4f46e5; /* brand-600 */
+            margin-bottom: 12px;
+            border-bottom: 2px solid #e0e7ff; /* brand-100 */
+            padding-bottom: 4px;
+        }
+        .guide-changelog-item {
+            margin-bottom: 12px;
+            border-left: 3px solid #c7d2fe; /* brand-200 */
+            padding-left: 12px;
+        }
+        .guide-changelog-item strong {
+            font-weight: 600;
+            color: #1f2937; /* gray-800 */
+        }
+        .guide-changelog-item ul {
+            list-style-type: disc;
+            padding-left: 20px;
+            font-size: 14px;
+            color: #4b5563; /* gray-600 */
+        }
+        
+        .guide-faq-item {
+            background-color: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb; /* gray-200 */
+            margin-bottom: 8px;
+            padding: 12px 16px;
+        }
+        .guide-faq-item h4 {
+            font-weight: 600;
+            color: #374151; /* gray-700 */
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .guide-faq-item h4 i {
+            color: #6366f1; /* brand-500 */
+        }
+        .guide-faq-item p {
+            font-size: 14px;
+            color: #4b5563; /* gray-600 */
+            margin-top: 8px;
+            padding-left: 28px; /* Align with icon */
+            line-height: 1.6;
+        }
+
+        /* [UX-v16] AI Summary Modal Styles */
+        #summary-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            color: #4b5563;
+        }
+        #summary-loading i {
+            font-size: 32px;
+            margin-bottom: 16px;
+        }
+        #summary-focus-list {
+            list-style: none;
+            padding: 0;
+            margin: 16px 0;
+            space-y: 12px;
+        }
+        #summary-focus-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1f2937; /* gray-800 */
+            line-height: 1.5;
+        }
+        #summary-focus-list li i {
+            color: #6366f1; /* brand-500 */
+            margin-top: 5px;
+        }
+        #summary-overview {
+            font-size: 14px;
+            color: #4b5563; /* gray-600 */
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb; /* gray-200 */
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[6000] opacity-0 pointer-events-none transition-all duration-300 translate-y-[-20px] bg-slate-800/95 text-white px-5 py-3 rounded-full shadow-xl backdrop-blur-md flex items-center gap-3 text-sm font-medium border border-slate-700/50">
+        <i id="toast-icon" class="fa-solid fa-check-circle text-emerald-400"></i>
+        <span id="toast-msg">บันทึกแล้ว</span>
+        <button id="toast-undo-btn" onclick="window.undoDelete()" class="hidden ml-2 px-3 py-0.5 rounded-full text-xs font-bold bg-white/20 hover:bg-white/30 text-white pointer-events-auto">
+            Undo
+        </button>
+    </div>
+
+    <!-- [UX-v16] AI Daily Summary Modal -->
+    <div id="summary-modal-container" class="hidden">
+        <div id="modal-backdrop-summary" class="modal-backdrop"></div>
+        <div id="summary-modal" class="modal-box">
+            
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3">
+                    <i class="fa-solid fa-wand-magic-sparkles text-ai-600"></i>
+                    AI สรุปงาน
+                </h3>
+                <button onclick="window.hideSummaryModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="summary-loading">
+                <i class="fa-solid fa-spinner fa-spin text-ai-500"></i>
+                <p class="font-semibold">AI กำลังวิเคราะห์งานของคุณ...</p>
+                <p class="text-sm">กรุณารอสักครู่</p>
+            </div>
+
+            <!-- Content State -->
+            <div id="summary-content" class="hidden">
+                <h4 id="summary-greeting" class="text-lg font-semibold text-slate-700"></h4>
+                <ul id="summary-focus-list">
+                    <!-- JS Populated -->
+                </ul>
+                <p id="summary-overview"></p>
+                
+                <button onclick="window.hideSummaryModal()" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 transition text-sm mt-6">
+                    ตกลง
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- Add Task Modal -->
+    <div id="add-modal-container" class="hidden">
+        <div id="modal-backdrop-add" class="modal-backdrop" onclick="window.hideAddModal()"></div>
+        <div id="add-modal" class="modal-box">
+            <h3 class="text-xl font-bold text-slate-800 mb-4">เพิ่มรายการใหม่</h3>
+            <form id="add-task-form">
+                <div class="relative">
+                    <input type="text" id="add-task-input" class="w-full bg-white border-2 border-slate-300 rounded-lg px-4 py-4 pr-14 text-base text-slate-700 focus:border-brand-500 focus:bg-white outline-none" placeholder="เช่น 'ประชุมพรุ่งนี้ 9 โมง'...">
+                    <button id="add-task-btn" type="submit" class="w-10 h-10 absolute top-1/2 -translate-y-1/2 right-2.5 flex-shrink-0 bg-gradient-to-br from-ai-500 to-brand-500 text-white rounded-lg flex items-center justify-center hover:from-ai-600 hover:to-brand-600 transition shadow-lg shadow-brand-100 overflow-hidden">
+                        <i id="add-task-icon" class="fa-solid fa-wand-magic-sparkles transition-transform duration-300"></i>
+                        <div id="add-task-loader" class="hidden absolute inset-0 bg-white/30 items-center justify-center">
+                            <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Task Detail / Edit Modal -->
+    <div id="task-detail-modal-container" class="hidden">
+        <div id="modal-backdrop-detail" class="modal-backdrop" onclick="window.hideDetailModal()"></div>
+        <div id="task-detail-modal" class="modal-box">
+            
+            <!-- View State -->
+            <div id="detail-view-content">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-slate-800">รายละเอียดงาน</h3>
+                    <button onclick="window.toggleDetailEdit(true)" class="text-sm font-semibold text-brand-600 hover:text-brand-500">
+                        <i class="fa-solid fa-pencil mr-1"></i> แก้ไข
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200">
+                        <button id="detail-toggle-complete-btn" class="task-item-checkbox text-xl transition">
+                            <!-- JS populated -->
+                        </button>
+                        <span id="detail-view-text" class="text-base font-semibold text-slate-700"></span>
+                    </div>
+                    
+                    <div class="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-calendar-day fa-fw w-8 text-slate-500"></i>
+                            <span id="detail-view-date" class="text-slate-700 font-medium"></span>
+                        </div>
+                        <div id="detail-view-time-row" class="flex items-center">
+                            <i class="fa-solid fa-clock fa-fw w-8 text-slate-500"></i>
+                            <span id="detail-view-time" class="text-slate-700 font-medium"></span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-star fa-fw w-8 text-slate-500"></i>
+                            <span id="detail-view-priority" class="text-slate-700 font-medium"></span>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-lg border border-slate-200">
+                         <label class="form-label">รายละเอียด / โน้ต</label>
+                         <p id="detail-view-notes" class="text-slate-600 text-sm whitespace-pre-wrap min-h-[50px]"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit State -->
+            <form id="detail-edit-form" class="hidden">
+                <h3 class="text-xl font-bold text-slate-800 mb-4">แก้ไขงาน</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label for="detail-edit-text" class="form-label">ชื่องาน</label>
+                        <input type="text" id="detail-edit-text" class="form-input" placeholder="ชื่องาน...">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="detail-edit-date" class="form-label">วันที่</label>
+                            <input type="date" id="detail-edit-date" class="form-input">
+                        </div>
+                        <div>
+                            <label for="detail-edit-time" class="form-label">เวลา (ไม่บังคับ)</label>
+                            <input type="time" id="detail-edit-time" class="form-input">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="detail-edit-priority" class="form-label">ความสำคัญ</label>
+                        <select id="detail-edit-priority" class="form-input">
+                            <option value="normal">ปกติ</option>
+                            <option value="high">สำคัญ (High)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="detail-edit-notes" class="form-label">รายละเอียด / โน้ต</label>
+                        <textarea id="detail-edit-notes" class="form-input" rows="4" placeholder="เพิ่มรายละเอียด..."></textarea>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-6">
+                    <button type="button" onclick="window.toggleDetailEdit(false)" class="w-full bg-slate-200 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-300 transition text-sm">ยกเลิก</button>
+                    <button type="submit" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 transition text-sm">บันทึก</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-confirm-modal-container" class="hidden">
+        <div id="modal-backdrop-delete" class="modal-backdrop" onclick="window.hideDeleteConfirmModal()"></div>
+        <div id="delete-confirm-modal" class="modal-box">
+            <h3 class="text-xl font-bold text-slate-800 mb-2">ยืนยันการลบ</h3>
+            <p class="text-slate-600 mb-4">
+                คุณต้องการลบรายการนี้ใช่หรือไม่?
+                <strong id="delete-task-name" class="block mt-1 truncate"></strong>
+            </p>
+            <div class="grid grid-cols-2 gap-3 mt-6">
+                <button onclick="window.hideDeleteConfirmModal()" class="w-full bg-slate-200 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-300 transition text-sm">ยกเลิก</button>
+                <button onclick="window.handleConfirmDelete()" class="w-full bg-danger-600 text-white font-bold py-3.5 rounded-xl hover:bg-danger-500 transition text-sm">
+                    <i class="fa-solid fa-trash-can mr-2"></i> ลบ
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Guide Modal -->
+    <div id="guide-modal-container" class="hidden">
+        <div id="modal-backdrop-guide" class="modal-backdrop" onclick="window.hideGuideModal()"></div>
+        <div id="guide-modal-box" class="modal-box">
+            
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3">
+                    <i class="fa-solid fa-book-open-reader text-brand-600"></i>
+                    คู่มือการใช้งาน
+                </h3>
+                <button onclick="window.hideGuideModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <div id="guide-modal-content" class="no-scrollbar">
+                
+                <div class="guide-section">
+                    <h3>มีอะไรใหม่</h3>
+                    <div id="guide-changelog-list" class="space-y-3">
+                        <!-- JS Populated -->
+                    </div>
+                </div>
+
+                <div class="guide-section">
+                    <h3>วิธีใช้งาน</h3>
+                    <div class="space-y-2">
+                         <div class="guide-faq-item">
+                            <h4><i class="fa-solid fa-lightbulb fa-fw"></i> AI สรุปงาน (ใหม่!)</h4>
+                            <p>
+                                เมื่อคุณเปิดแอป "ครั้งแรกของวัน" (และมี API Key), AI จะวิเคราะห์และสรุปงานที่สำคัญที่สุดให้คุณโดยอัตโนมัติ
+                            </p>
+                        </div>
+                        <div class="guide-faq-item">
+                            <h4><i class="fa-solid fa-plus fa-fw"></i> การเพิ่มรายการ</h4>
+                            <p>
+                                1. <strong>(แนะนำ)</strong> กดปุ่ม <i class="fa-solid fa-plus-circle text-ai-500"></i> สีม่วงลอยที่มุมล่างจอ
+                                <br>
+                                2. พิมพ์ข้อความ AI (Smart Add) จะช่วยสกัดวันที่, เวลา, และความสำคัญให้
+                            </p>
+                        </div>
+                        <div class="guide-faq-item">
+                            <h4><i class="fa-solid fa-tasks fa-fw"></i> การจัดการรายการ</h4>
+                            <p>
+                                - <strong>เสร็จ:</strong> กด <i class="fa-regular fa-square"></i> หน้าชื่องาน
+                                <br>
+                                - <strong>สำคัญ:</strong> กด <i class="fa-regular fa-star"></i> ถัดจากช่อง
+                                <br>
+                                - <strong>แก้ไข:</strong> กดที่ "ชื่อรายการ" เพื่อเปิดหน้าต่างรายละเอียด และกด "แก้ไข"
+                            </p>
+                        </div>
+                        <div class="guide-faq-item">
+                            <h4><i class="fa-solid fa-calendar-days fa-fw"></i> มุมมองปฏิทิน</h4>
+                            <p>
+                                1. ในหน้า 'Tasks', กดไอคอน <i class="fa-solid fa-calendar-days"></i> ด้านบนเพื่อสลับมุมมอง
+                                <br>
+                                2. "จุดสี" บนวันที่ หมายถึงมีรายการในวันนั้น
+                                <br>
+                                3. คลิกที่ "วันที่" เพื่อดูรายการในหน้าต่าง Bottom Sheet
+                            </p>
+                        </div>
+                         <div class="guide-faq-item">
+                            <h4><i class="fa-solid fa-wand-magic-sparkles fa-fw"></i> Chat AI ทำอะไรได้บ้าง</h4>
+                            <p>
+                                Chat AI สามารถ "อ่าน" รายการทั้งหมดของคุณได้ คุณสามารถสั่งการเป็นภาษาไทยได้เลย เช่น:
+                                <br>
+                                - "ลบรายการที่เสร็จแล้วทั้งหมด"
+                                <br>
+                                - "มีงานด่วนอะไรบ้าง"
+                                <br>
+                                - "สรุปงานของฉันให้หน่อย"
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- Calendar Sheet Modal -->
+    <div id="calendar-sheet-modal-container" class="hidden">
+        <div id="modal-backdrop-calendar-sheet" class="modal-backdrop" onclick="window.hideCalendarSheetModal()"></div>
+        <div id="calendar-sheet-modal" class="modal-box">
+            
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="calendar-sheet-title" class="text-xl font-bold text-slate-800"></h3>
+                <button onclick="window.hideCalendarSheetModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <div id="calendar-sheet-list" class="no-scrollbar bg-white rounded-lg shadow-inner-sm border border-slate-200">
+                <!-- JS populated -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- App Shell -->
+    <main id="app-shell">
+
+        <!-- Header -->
+        <header class="px-6 py-4 flex justify-between items-center sticky top-0 bg-white/95 z-40 backdrop-blur-md">
+            <div class="flex flex-col">
+                <h1 class="text-xl font-bold text-brand-600">AI To-Do</h1>
+                <p id="header-subtitle" class="text-sm text-slate-500">กำลังโหลด...</p>
+            </div>
+            <div id="header-icon-container" class="w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 border-4 border-white shadow-md hidden">
+                <i id="header-icon" class="fa-solid fa-list-check text-xl"></i>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div id="content-area" class="flex-1 overflow-y-auto no-scrollbar">
+            
+            <!-- View 1 - Tasks -->
+            <section id="view-tasks" class="flex flex-col h-full">
+                
+                <!-- View Mode Switcher -->
+                <div class="px-6 pt-4 pb-2 bg-white sticky top-0 z-10 border-b border-gray-100 flex justify-between items-center">
+                    <div class="view-mode-switcher">
+                        <button id="view-mode-list" onclick="window.switchTaskViewMode('list')" class="view-mode-btn active">
+                            <i class="fa-solid fa-list-check fa-fw"></i>
+                        </button>
+                        <button id="view-mode-calendar" onclick="window.switchTaskViewMode('calendar')" class="view-mode-btn">
+                            <i class="fa-solid fa-calendar-days fa-fw"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="calendar-view" class="hidden flex-1 flex-col overflow-y-auto no-scrollbar p-4">
+                    <div id="calendar-header" class="flex justify-between items-center mb-3">
+                        <button onclick="window.changeCalendarMonth(-1)" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <h3 id="calendar-month-year" class="text-lg font-bold text-brand-600"></h3>
+                        <button onclick="window.changeCalendarMonth(1)" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 mb-2">
+                        <div class="calendar-day-header">อา</div>
+                        <div class="calendar-day-header">จ</div>
+                        <div class="calendar-day-header">อ</div>
+                        <div class="calendar-day-header">พ</div>
+                        <div class="calendar-day-header">พฤ</div>
+                        <div class="calendar-day-header">ศ</div>
+                        <div class="calendar-day-header">ส</div>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-1">
+                        <!-- JS populated -->
+                    </div>
+                </div>
+
+                <div id="list-view" class="flex-1 flex flex-col overflow-y-auto no-scrollbar">
+                    <div class="px-6 pt-2 pb-2 bg-white"> 
+                        <div class="segmented-control">
+                            <div class="segmented-bg" id="filter-view-bg"></div>
+                            <div class="segmented-item active" onclick="window.changeFilter('all', 0)">
+                                <i class="fa-solid fa-grip"></i> <span>ทั้งหมด</span>
+                            </div>
+                            <div class="segmented-item" onclick="window.changeFilter('active', 1)">
+                                <i class="fa-solid fa-hourglass-half"></i> <span>ที่ต้องทำ</span>
+                            </div>
+                            <div class="segmented-item" onclick="window.changeFilter('completed', 2)">
+                                <i class="fa-solid fa-check-double"></i> <span>เสร็จแล้ว</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="task-list-container" class="flex-1 overflow-y-auto no-scrollbar pb-6 bg-white">
+                        <div id="tasks-loading-indicator" class="hidden text-center text-slate-500 mt-10 p-4">
+                            <i class="fa-solid fa-spinner fa-spin text-4xl text-slate-300 mb-4"></i>
+                            <p class="font-semibold">กำลังโหลด...</p>
+                        </div>
+                        <!-- Tasks will be rendered here -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- View 2 - Chat AI -->
+            <section id="view-chat" class="hidden">
+                 <div id="chat-message-container" class="no-scrollbar">
+                    <!-- JS populates this -->
+                 </div>
+                 <div id="chat-form-container">
+                     <form id="chat-form" onsubmit="window.sendChatMessage(event)">
+                         <div id="chat-input-row">
+                             <textarea id="chat-input" placeholder="พิมพ์คำสั่ง (เช่น 'ลบงานที่เสร็จแล้ว')..." rows="1"></textarea>
+                             <button id="chat-send-btn" type="submit" class="chat-btn">
+                                 <i class="fa-solid fa-paper-plane"></i>
+                             </button>
+                         </div>
+                     </form>
+                 </div>
+            </section>
+
+            <!-- View 3 - Settings -->
+            <section id="view-settings" class="hidden p-6 space-y-6 bg-gray-100 h-full">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-lg font-bold text-slate-700 mb-4">ความช่วยเหลือ</h3>
+                    <button id="show-guide-btn" onclick="window.showGuideModal()" class="w-full bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition text-sm">
+                        <i class="fa-solid fa-book-open-reader mr-2"></i> เปิดคู่มือการใช้งาน
+                    </button>
+                </div>
+                
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-lg font-bold text-slate-700 mb-4">ตั้งค่า API & Sync</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="input-api-key" class="form-label">Gemini API Key (ตัวเลือก)</label>
+                            <input type="password" id="input-api-key" class="form-input" placeholder="หากเว้นว่าง จะใช้ Key เริ่มต้น">
+                        </div>
+                        <div>
+                            <label for="input-gas-url" class="form-label">Google Apps Script URL (สำหรับ Sync)</label>
+                            <input type="url" id="input-gas-url" class="form-input" placeholder="https://script.google.com/macros/s/...">
+                        </div>
+                        <button onclick="window.handleSaveSettings()" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 transition text-sm">
+                            <i class="fa-solid fa-save mr-2"></i> บันทึกการตั้งค่า
+                        </button>
+                    </div>
+                     <p class="text-xs text-slate-500 mt-4">
+                        <i class="fa-solid fa-info-circle mr-1"></i> <strong>API Key:</strong> ระบบจะใช้ Key ที่คุณกรอกก่อน หากเว้นว่าง, ระบบจะใช้ Key เริ่มต้น
+                    </p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-lg font-bold text-slate-700 mb-4">Google Sheet Apps Script (Code.gs)</h3>
+                    <pre class="overflow-x-auto p-3 bg-slate-800 text-slate-200 rounded-md text-xs"><code>function doPost(e) {
+  try {
+    var sheetName = "ToDoTasks";
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(sheetName);
+    }
+    var data = JSON.parse(e.postData.contents);
+    sheet.clear();
+    
+    if (data.length === 0) {
+      sheet.getRange(1, 1).setValue("No tasks synced.");
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", rows_synced: 0 })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var headers = Object.keys(data[0]);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
+    
+    var values = data.map(function(task) {
+      return headers.map(header => task[header]);
+    });
+    
+    sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+    sheet.autoResizeColumns(1, headers.length);
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", rows_synced: values.length })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.message })).setMimeType(ContentService.MimeType.JSON);
+  }
+}</code></pre>
+                </div>
+
+            </section>
+
+        </div>
+
+        <!-- Bottom Nav -->
+        <nav id="bottom-nav" class="bottom-nav shrink-0">
+            <div id="nav-tasks" class="nav-item active" onclick="window.switchView('tasks')">
+                <span id="nav-task-badge" class="nav-badge hidden">0</span>
+                <i class="fa-solid fa-list-check"></i>
+                <span>Tasks</span>
+                <span class="active-dot"></span>
+            </div>
+            <div id="nav-chat" class="nav-item" onclick="window.switchView('chat')">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Chat AI</span>
+                <span class="active-dot"></span>
+            </div>
+            <div id="nav-settings" class="nav-item" onclick="window.switchView('settings')">
+                <i class="fa-solid fa-gear"></i>
+                <span>Settings</span>
+                <span class="active-dot"></span>
+            </div>
+        </nav>
+
+        <!-- FAB -->
+        <button id="fab-add-task" class="fab-add-task" onclick="window.showAddModal()">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+    </main>
+
+    <script type="module">
+        
+        // --- CHANGELOG (for automatic guide updates) ---
+        const CHANGELOG = [
+             { 
+                version: "v17 (LocalStorage)", 
+                features: [
+                    "ถอนการเชื่อมต่อ Firebase ทั้งหมด",
+                    "เปลี่ยนระบบจัดเก็บข้อมูลกลับไปเป็น LocalStorage",
+                    "แอปสามารถทำงาน Offline ได้ 100% (ยกเว้นฟีเจอร์ AI)"
+                ] 
+            },
+            { 
+                version: "v16", 
+                features: [
+                    "เพิ่มฟีเจอร์ 'AI สรุปงาน' (Daily Briefing)",
+                    "AI จะวิเคราะห์และสรุปงานสำคัญให้คุณอัตโนมัติ เมื่อเปิดแอปครั้งแรกของวัน"
+                ] 
+            },
+            { 
+                version: "v15", 
+                features: [
+                    "ปรับปรุง UI หน้า Chat AI (ตามภาพรีวิว)",
+                    "ซ่อนไอคอน Header ที่ซ้ำซ้อนในหน้า Chat และ Settings"
+                ] 
+            }
+        ];
+
+        // --- STATE & DOM ---
+        let state = {
+            tasks: [],
+            filter: 'all',
+            viewingTaskId: null,
+            deletingTaskId: null, 
+            isAiThinking: false,
+            chatHistory: [],
+            isChatAiThinking: false,
+            calendarDate: new Date(), 
+            taskViewMode: 'list',
+            calendarSheetDate: null
+        };
+        
+        let lastDeletedTask = null;
+        let undoTimeout = null;
+        let gasUrl = ''; 
+        let geminiApiKey = ''; 
+
+        const dom = {
+            views: {
+                tasks: document.getElementById('view-tasks'),
+                chat: document.getElementById('view-chat'),
+                settings: document.getElementById('view-settings')
+            },
+            nav: {
+                tasks: document.getElementById('nav-tasks'),
+                chat: document.getElementById('nav-chat'),
+                settings: document.getElementById('nav-settings'),
+                badge: document.getElementById('nav-task-badge') 
+            },
+            headerSubtitle: document.getElementById('header-subtitle'),
+            headerIconContainer: document.getElementById('header-icon-container'),
+            headerIcon: document.getElementById('header-icon'),
+            fabAddTask: document.getElementById('fab-add-task'),
+            addModalContainer: document.getElementById('add-modal-container'),
+            addTaskForm: document.getElementById('add-task-form'),
+            addTaskInput: document.getElementById('add-task-input'),
+            addTaskBtn: document.getElementById('add-task-btn'),
+            addTaskIcon: document.getElementById('add-task-icon'),
+            addTaskLoader: document.getElementById('add-task-loader'),
+            
+            listView: document.getElementById('list-view'),
+            calendarView: document.getElementById('calendar-view'),
+            viewModeListBtn: document.getElementById('view-mode-list'),
+            viewModeCalendarBtn: document.getElementById('view-mode-calendar'),
+            
+            taskListContainer: document.getElementById('task-list-container'),
+            filterViewBg: document.getElementById('filter-view-bg'),
+            tasksLoadingIndicator: document.getElementById('tasks-loading-indicator'),
+            
+            calendarHeader: document.getElementById('calendar-header'),
+            calendarMonthYear: document.getElementById('calendar-month-year'),
+            calendarGrid: document.getElementById('calendar-grid'),
+            
+            calendarSheetModalContainer: document.getElementById('calendar-sheet-modal-container'),
+            calendarSheetTitle: document.getElementById('calendar-sheet-title'),
+            calendarSheetList: document.getElementById('calendar-sheet-list'),
+
+            taskDetailModalContainer: document.getElementById('task-detail-modal-container'),
+            detailViewContent: document.getElementById('detail-view-content'),
+            detailEditForm: document.getElementById('detail-edit-form'),
+            detailToggleCompleteBtn: document.getElementById('detail-toggle-complete-btn'),
+            detailViewText: document.getElementById('detail-view-text'),
+            detailViewDate: document.getElementById('detail-view-date'),
+            detailViewTimeRow: document.getElementById('detail-view-time-row'),
+            detailViewTime: document.getElementById('detail-view-time'),
+            detailViewPriority: document.getElementById('detail-view-priority'),
+            detailViewNotes: document.getElementById('detail-view-notes'),
+            detailEditText: document.getElementById('detail-edit-text'),
+            detailEditDate: document.getElementById('detail-edit-date'),
+            detailEditTime: document.getElementById('detail-edit-time'),
+            detailEditPriority: document.getElementById('detail-edit-priority'),
+            detailEditNotes: document.getElementById('detail-edit-notes'),
+
+            deleteConfirmModalContainer: document.getElementById('delete-confirm-modal-container'),
+            deleteTaskName: document.getElementById('delete-task-name'),
+
+            guideModalContainer: document.getElementById('guide-modal-container'),
+            guideChangelogList: document.getElementById('guide-changelog-list'),
+
+            summaryModalContainer: document.getElementById('summary-modal-container'),
+            summaryLoading: document.getElementById('summary-loading'),
+            summaryContent: document.getElementById('summary-content'),
+            summaryGreeting: document.getElementById('summary-greeting'),
+            summaryFocusList: document.getElementById('summary-focus-list'),
+            summaryOverview: document.getElementById('summary-overview'),
+
+            inputApiKey: document.getElementById('input-api-key'), 
+            inputGasUrl: document.getElementById('input-gas-url'),
+            
+            toast: document.getElementById('toast'),
+            toastIcon: document.getElementById('toast-icon'),
+            toastMsg: document.getElementById('toast-msg'),
+            toastUndoBtn: document.getElementById('toast-undo-btn'),
+            
+            chatMessageContainer: document.getElementById('chat-message-container'),
+            chatForm: document.getElementById('chat-form'),
+            chatInput: document.getElementById('chat-input'),
+            chatSendBtn: document.getElementById('chat-send-btn')
+        };
+        
+        // --- UTILITY ---
+        function getNormalizedDate(date) {
+            date.setHours(0, 0, 0, 0);
+            return date;
+        }
+
+        // --- INITIALIZATION ---
+        function initApp() {
+            loadSettings(); 
+            loadTasks(); // [v17] Load from LocalStorage
+            loadChatHistory(); // [v17] Load from LocalStorage
+            
+            window.switchView('tasks'); 
+            
+            dom.addTaskForm.addEventListener('submit', window.handleSmartAdd);
+            dom.fabAddTask.addEventListener('click', window.showAddModal);
+            dom.detailEditForm.addEventListener('submit', window.handleSaveDetailEdit);
+            
+            dom.chatInput.addEventListener('input', () => {
+                dom.chatInput.style.height = 'auto'; 
+                dom.chatInput.style.height = `${dom.chatInput.scrollHeight}px`;
+            });
+            dom.chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    dom.chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
+                }
+            });
+
+            window.renderCalendar();
+            window.renderChangelog(); 
+            
+            // [v17] Trigger summary after tasks are loaded
+            window.triggerDailySummary();
+        }
+
+        // --- NAVIGATION ---
+        window.switchView = (viewId) => {
+            Object.values(dom.views).forEach(view => {
+                view.classList.add('hidden');
+                if(view.id === 'view-chat') view.style.display = 'none';
+                if(view.id === 'view-tasks') view.style.display = 'none';
+            });
+            
+            const view = dom.views[viewId];
+            if (view) {
+                view.classList.remove('hidden');
+                if(viewId === 'chat') view.style.display = 'flex';
+                if(viewId === 'tasks') view.style.display = 'flex';
+            }
+            
+            Object.values(dom.nav).forEach(nav => nav.classList.remove('active'));
+            if (dom.nav[viewId]) dom.nav[viewId].classList.add('active');
+
+            dom.fabAddTask.classList.toggle('hidden', viewId !== 'tasks');
+            
+            updateHeader(viewId);
+            
+            if(viewId === 'tasks') {
+                if (state.taskViewMode === 'list') {
+                    renderTasks();
+                } else {
+                    renderCalendar();
+                }
+            }
+            if(viewId === 'chat') renderChatHistory();
+            if(viewId === 'settings') renderSettings();
+        };
+        
+        window.switchTaskViewMode = (mode) => {
+            state.taskViewMode = mode;
+            if (mode === 'list') {
+                dom.listView.classList.remove('hidden');
+                dom.listView.classList.add('flex');
+                dom.calendarView.classList.add('hidden');
+                dom.calendarView.classList.remove('flex');
+                dom.viewModeListBtn.classList.add('active');
+                dom.viewModeCalendarBtn.classList.remove('active');
+                renderTasks();
+            } else {
+                dom.listView.classList.add('hidden');
+                dom.listView.classList.remove('flex');
+                dom.calendarView.classList.remove('hidden');
+                dom.calendarView.classList.add('flex');
+                dom.viewModeListBtn.classList.remove('active');
+                dom.viewModeCalendarBtn.classList.add('active');
+                renderCalendar();
+            }
+        };
+
+        function updateHeader(viewId) {
+            let subtitle, icon, bgColor, textColor;
+            const activeTasks = state.tasks.filter(t => !t.completed).length;
+            
+            dom.headerIconContainer.classList.add('hidden');
+
+            switch(viewId) {
+                case 'chat':
+                    subtitle = "Chat AI Assistant";
+                    break;
+                case 'settings':
+                    subtitle = "การตั้งค่า & Sync";
+                    break;
+                case 'tasks':
+                default:
+                    subtitle = `มี ${activeTasks} รายการที่ต้องทำ`;
+                    icon = "fa-solid fa-list-check";
+                    bgColor = "bg-brand-50";
+                    textColor = "text-brand-600";
+                    dom.headerIconContainer.classList.remove('hidden');
+                    dom.headerIcon.className = `${icon} text-xl`;
+                    dom.headerIconContainer.className = `w-12 h-12 ${bgColor} ${textColor} rounded-full flex items-center justify-center border-4 border-white shadow-md`;
+                    break;
+            }
+            
+            dom.headerSubtitle.textContent = subtitle;
+        }
+
+        // --- DATA PERSISTENCE (LocalStorage) ---
+        
+        function loadTasks() {
+            const data = localStorage.getItem('todo_tasks_v17');
+            if (data) {
+                try {
+                    state.tasks = JSON.parse(data);
+                    // Ensure new fields exist
+                    state.tasks.forEach(task => {
+                        if (!task.priority) task.priority = 'normal';
+                        if (task.dueDate === undefined) task.dueDate = null;
+                        if (task.dueTime === undefined) task.dueTime = null;
+                        if (task.notes === undefined) task.notes = "";
+                    });
+                } catch (e) {
+                    state.tasks = [];
+                }
+            } else {
+                // Default tasks if empty
+                state.tasks = [
+                    { id: Date.now() + 1, text: "งานที่เลยกำหนด", completed: false, priority: 'normal', dueDate: "2025-11-10", dueTime: null, notes: "" },
+                    { id: Date.now() + 2, text: "งานชิ้นที่ 2 (สำคัญ)", completed: true, priority: 'high', dueDate: "2025-11-15", dueTime: "14:00", notes: "ซื้อของก่อนกลับบ้าน" },
+                    { id: Date.now() + 3, text: "งานที่ต้องทำวันนี้", completed: false, priority: 'high', dueDate: new Date().toLocaleDateString('sv-SE'), dueTime: "09:00", notes: "ประชุมทีม" },
+                    { id: Date.now() + 4, text: "งานชิ้นที่ 1 (ตัวอย่าง)", completed: false, priority: 'normal', dueDate: null, dueTime: null, notes: "" }
+                ];
+            }
+            dom.tasksLoadingIndicator.classList.add('hidden');
+        }
+
+        // [v17] New unified save & render function
+        function saveAndRender() {
+            try {
+                localStorage.setItem('todo_tasks_v17', JSON.stringify(state.tasks));
+                console.log("Tasks saved to LocalStorage.");
+                window.triggerAutoSync(); // GSheet sync (if URL provided)
+            } catch (error) {
+                console.error("Error saving tasks to LocalStorage:", error);
+                showToast(`Error saving tasks: ${error.message}`, 'error');
+            }
+            
+            // Now, trigger all UI updates that onSnapshot used to handle
+            if (dom.views.tasks.classList.contains('hidden')) {
+                // If user is not on task view, just update badge
+                const activeTasks = state.tasks.filter(t => !t.completed).length;
+                dom.nav.badge.textContent = activeTasks;
+                dom.nav.badge.classList.toggle('hidden', activeTasks === 0);
+            } else if (state.taskViewMode === 'list') {
+                renderTasks();
+            } else {
+                renderCalendar();
+                if (state.calendarSheetDate && !dom.calendarSheetModalContainer.classList.contains('hidden')) {
+                    window.showTasksForDay(state.calendarSheetDate, true); // force refresh
+                }
+            }
+            updateHeader(dom.nav.tasks.classList.contains('active') ? 'tasks' : (dom.nav.chat.classList.contains('active') ? 'chat' : 'settings'));
+        }
+
+        function loadChatHistory() {
+            const data = localStorage.getItem('todo_chat_history_v17');
+             if (data) {
+                try { 
+                    state.chatHistory = JSON.parse(data); 
+                } catch (e) { 
+                    state.chatHistory = []; 
+                }
+            } else { 
+                state.chatHistory = []; 
+            }
+
+            if (state.chatHistory.length === 0) {
+                 addMessageToChat('ai', 'สวัสดีค่ะ ฉันคือผู้ช่วย AI ฉันสามารถจัดการเวลาและโน้ตให้คุณได้ค่ะ');
+            }
+            renderChatHistory();
+        }
+
+        function saveChatHistory() {
+             try {
+                const recentHistory = state.chatHistory.slice(-50);
+                localStorage.setItem('todo_chat_history_v17', JSON.stringify(recentHistory));
+                console.log("Chat history saved to LocalStorage.");
+             } catch (error) {
+                 console.error("Error saving chat history:", error);
+             }
+        }
+
+        // --- RENDERING (LIST VIEW) ---
+        function renderTasks() {
+            dom.tasksLoadingIndicator.classList.add('hidden'); 
+            
+            const filter = state.filter;
+            let tasksToRender = state.tasks;
+
+            if (filter === 'active') tasksToRender = state.tasks.filter(task => !task.completed);
+            else if (filter === 'completed') tasksToRender = state.tasks.filter(task => task.completed);
+            
+            const activeTasks = state.tasks.filter(t => !t.completed).length;
+            dom.nav.badge.textContent = activeTasks;
+            dom.nav.badge.classList.toggle('hidden', activeTasks === 0);
+            updateHeader('tasks'); 
+
+            if (tasksToRender.length === 0) {
+                let emptyMsg = "ไม่มีรายการ";
+                if (filter === 'all' || filter === 'active') {
+                    emptyMsg = `<div class="text-center text-slate-500 mt-10 p-4 bg-white rounded-2xl animate-fade-in">
+                                    <i class="fa-solid fa-wind text-4xl text-green-300 mb-4"></i>
+                                    <p class="font-semibold text-lg text-green-600">เยี่ยมไปเลย!</p>
+                                    <p>ไม่มีรายการค้างในรายการนี้</p>
+                                </div>`;
+                } else {
+                     emptyMsg = `<div class="text-center text-slate-500 mt-10 p-4 bg-white rounded-2xl animate-fade-in">
+                                    <i class="fa-solid fa-clipboard-check text-4xl text-slate-300 mb-4"></i>
+                                    <p class="font-semibold">ไม่มีรายการที่เสร็จแล้ว</p>
+                                </div>`;
+                }
+                dom.taskListContainer.innerHTML = emptyMsg;
+                return;
+            }
+
+            tasksToRender.sort((a, b) => {
+                if (a.priority === 'high' && b.priority !== 'high') return -1;
+                if (a.priority !== 'high' && b.priority === 'high') return 1;
+                const dateA = a.dueDate ? new Date(`${a.dueDate}T${a.dueTime || '00:00'}`) : new Date('2999-12-31');
+                const dateB = b.dueDate ? new Date(`${b.dueDate}T${b.dueTime || '00:00'}`) : new Date('2999-12-31');
+                if (dateA < dateB) return -1;
+                if (dateA > dateB) return 1;
+                return b.id - a.id; 
+            });
+
+            const today = getNormalizedDate(new Date());
+            
+            dom.taskListContainer.innerHTML = tasksToRender.map(task => 
+                createTaskItemHTML(task, today)
+            ).join('');
+        }
+        
+        function createTaskItemHTML(task, todayDate) {
+            const priorityClass = task.priority === 'high' ? 'priority-high' : '';
+            const starIcon = task.priority === 'high' 
+                ? 'fa-solid fa-star text-priority-500' 
+                : 'fa-regular fa-star text-slate-300';
+            
+            const today = todayDate || getNormalizedDate(new Date());
+            const taskDate = task.dueDate ? getNormalizedDate(new Date(task.dueDate + 'T00:00:00')) : null;
+            const isOverdue = taskDate && taskDate < today && !task.completed;
+            const isToday = taskDate && taskDate.getTime() === today.getTime() && !task.completed;
+
+            let subtitleParts = [];
+            if (task.dueDate) {
+                subtitleParts.push(taskDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
+            }
+            if (task.dueTime) {
+                subtitleParts.push(task.dueTime);
+            }
+            const subtitleHtml = subtitleParts.length > 0
+                ? `<span class="task-subtitle">
+                     <i class="fa-regular ${task.dueTime ? 'fa-clock' : 'fa-calendar'} fa-fw"></i>
+                     ${subtitleParts.join(', ')}
+                   </span>`
+                : '';
+
+            let statusBadgeHtml = '';
+            if (isOverdue) {
+                statusBadgeHtml = `<span class="task-status-badge task-status-overdue">เลยกำหนด</span>`;
+            } else if (isToday) {
+                statusBadgeHtml = `<span class="task-status-badge task-status-today">วันนี้</span>`;
+            }
+
+            const checkboxIcon = task.completed 
+                ? 'fa-solid fa-square-check text-accent-500 hover:text-accent-600'
+                : 'fa-regular fa-square text-slate-400 hover:text-brand-500';
+
+            return `
+            <div class="task-item ${task.completed ? 'completed' : ''} ${priorityClass}">
+                <button onclick="window.toggleTask(${task.id}, event)" class="task-item-checkbox text-xl transition">
+                    <i class="${checkboxIcon}"></i>
+                </button>
+                
+                <div class="flex-1 cursor-pointer min-w-0" onclick="window.showDetailModal(${task.id})">
+                    <span class="task-text break-words">${escapeHTML(task.text)}</span>
+                    <div class="flex items-center gap-2 mt-1">
+                        ${subtitleHtml}
+                        ${statusBadgeHtml}
+                    </div>
+                </div>
+                
+                <button onclick="window.togglePriority(${task.id}, event)" class="w-8 h-8 flex-shrink-0 flex items-center justify-center text-lg transition text-slate-400 hover:scale-125">
+                    <i class="${starIcon}"></i>
+                </button>
+                <button onclick="window.showDeleteConfirmModal(${task.id}, event)" class="w-8 h-8 flex-shrink-0 flex items-center justify-center text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50 transition">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                </button>
+            </div>
+        `;
+        }
+        
+        // --- RENDERING (CALENDAR VIEW) ---
+        window.renderCalendar = () => {
+            const now = state.calendarDate;
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            
+            dom.calendarMonthYear.textContent = `${now.toLocaleDateString('th-TH', { month: 'long' })} ${year + 543}`;
+            dom.calendarGrid.innerHTML = '';
+            
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            const tasksByDate = {};
+            state.tasks.forEach(task => {
+                if (task.dueDate) {
+                    const date = task.dueDate; // YYYY-MM-DD
+                    if (!tasksByDate[date]) tasksByDate[date] = [];
+                    tasksByDate[date].push(task);
+                }
+            });
+
+            // *** UPDATE: Pre-calculate today's date (normalized) ***
+            const today = getNormalizedDate(new Date());
+
+            for (let i = 0; i < 42; i++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day h-14';
+                
+                const dayOfMonth = i - firstDay + 1;
+                
+                if (i < firstDay || dayOfMonth > daysInMonth) {
+                    dayCell.classList.add('other-month');
+                } else {
+                    const date = new Date(year, month, dayOfMonth);
+                    const dateString = date.toLocaleDateString('sv-SE'); // YYYY-MM-DD
+                    
+                    const dayNum = document.createElement('span');
+                    dayNum.textContent = dayOfMonth;
+                    
+                    // *** UPDATE: Use pre-calculated today object for comparison ***
+                    if (today.getTime() === date.getTime()) {
+                        dayNum.className = 'today';
+                    }
+                    dayCell.appendChild(dayNum);
+
+                    if (tasksByDate[dateString]) {
+                        const dotContainer = document.createElement('div');
+                        dotContainer.className = 'flex justify-center items-center gap-0.5';
+                        const hasPriority = tasksByDate[dateString].some(t => t.priority === 'high');
+                        
+                        const dot = document.createElement('div');
+                        dot.className = `task-dot ${hasPriority ? 'priority' : ''}`;
+                        dotContainer.appendChild(dot);
+                        dayCell.appendChild(dotContainer);
+                    }
+                    
+                    dayCell.onclick = () => window.showTasksForDay(dateString);
+                }
+                dom.calendarGrid.appendChild(dayCell);
+            }
+        };
+        
+        window.changeCalendarMonth = (offset) => {
+            state.calendarDate.setMonth(state.calendarDate.getMonth() + offset);
+            renderCalendar();
+        };
+
+        window.showTasksForDay = (dateString, isRefresh = false) => {
+            const tasksForDay = state.tasks.filter(t => t.dueDate === dateString);
+            
+            if (tasksForDay.length === 0) {
+                if (isRefresh) {
+                    window.hideCalendarSheetModal();
+                }
+                return;
+            }
+            
+            state.calendarSheetDate = dateString;
+
+            const date = new Date(dateString + 'T00:00:00');
+            dom.calendarSheetTitle.textContent = `รายการสำหรับ ${date.toLocaleDateString('th-TH', { dateStyle: 'long' })}`;
+
+            dom.calendarSheetList.innerHTML = tasksForDay.map(task => 
+                createTaskItemHTML(task)
+            ).join('');
+            
+            if (!isRefresh) {
+                window.showCalendarSheetModal();
+            }
+        };
+
+        window.showCalendarSheetModal = () => {
+            dom.calendarSheetModalContainer.classList.remove('hidden');
+        };
+        window.hideCalendarSheetModal = () => {
+            dom.calendarSheetModalContainer.classList.add('hidden');
+            state.calendarSheetDate = null; 
+        };
+
+
+        function renderSettings() {
+            dom.inputApiKey.value = geminiApiKey; 
+            dom.inputGasUrl.value = gasUrl;
+        }
+        
+        // --- Guide Modal Functions ---
+        window.showGuideModal = () => {
+            dom.guideModalContainer.classList.remove('hidden');
+        };
+        window.hideGuideModal = () => {
+            dom.guideModalContainer.classList.add('hidden');
+        };
+        window.renderChangelog = () => {
+            dom.guideChangelogList.innerHTML = CHANGELOG.map(entry => `
+                <div class="guide-changelog-item">
+                    <strong>${entry.version}</strong>
+                    <ul>
+                        ${entry.features.map(feature => `<li>${feature}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+        };
+        
+        // --- [UX-v16] AI Summary Modal Functions ---
+        window.triggerDailySummary = () => {
+            const today = new Date().toLocaleDateString('th-TH');
+            const lastSummary = localStorage.getItem('todo_last_summary_date_v17');
+
+            if (today === lastSummary) {
+                console.log("Daily summary already shown today.");
+                return;
+            }
+            if (state.tasks.length === 0) {
+                console.log("No tasks to summarize.");
+                return;
+            }
+            if (!geminiApiKey) {
+                console.log("User API key not set. Skipping daily summary.");
+                return;
+            }
+            
+            localStorage.setItem('todo_last_summary_date_v17', today);
+            
+            window.showSummaryModal();
+            window.fetchAiSummary();
+        };
+
+        window.showSummaryModal = () => {
+            dom.summaryModalContainer.classList.remove('hidden');
+            dom.summaryLoading.classList.remove('hidden');
+            dom.summaryContent.classList.add('hidden');
+        };
+
+        window.hideSummaryModal = () => {
+            dom.summaryModalContainer.classList.add('hidden');
+        };
+
+        window.fetchAiSummary = async () => {
+            const hour = new Date().getHours();
+            let timeGreeting = "สวัสดีครับ";
+            if (hour < 12) timeGreeting = "สวัสดีตอนเช้าครับ";
+            else if (hour < 18) timeGreeting = "สวัสดีตอนบ่ายครับ";
+            else timeGreeting = "สวัสดีตอนเย็นครับ";
+            
+            const todayISO = new Date().toLocaleDateString('sv-SE');
+
+            const systemPrompt = `คุณคือผู้ช่วย AI วิเคราะห์งาน (Task Analyst)
+ข้อเท็จจริง:
+- วันนี้คือวันที่ ${todayISO}
+- ${timeGreeting}
+คำสั่ง:
+- วิเคราะห์รายการ Task ทั้งหมดที่ผู้ใช้ส่งมา (JSON)
+- สรุปสั้นๆ ให้ผู้ใช้เข้าใจว่าต้องโฟกัสอะไร
+- เน้น "งานที่เลยกำหนด" (Overdue) และ "งานสำคัญ (High Priority) ที่ต้องทำวันนี้"
+- ตอบกลับเป็น JSON ที่มี Schema ที่กำหนดเท่านั้น
+`;
+            
+            const generationConfig = {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "OBJECT",
+                    properties: {
+                        "greeting": { "type": "STRING" },
+                        "focusPoints": { 
+                            type: "ARRAY", 
+                            items: { "type": "STRING" }
+                        },
+                        "overview": { "type": "STRING" }
+                    },
+                    required: ["greeting", "focusPoints", "overview"]
+                }
+            };
+            
+            const payload = {
+                contents: [{ parts: [{ text: JSON.stringify(state.tasks) }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: generationConfig
+            };
+
+            const apiKey = geminiApiKey || ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) { 
+                    const errorData = await response.json(); 
+                    throw new Error(errorData.error?.message || "AI summary request failed"); 
+                }
+                
+                const result = await response.json();
+                const aiResponseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!aiResponseText) {
+                    throw new Error("AI summary response was empty.");
+                }
+
+                const summaryData = JSON.parse(aiResponseText);
+                window.renderSummaryModal(summaryData);
+
+            } catch (error) {
+                console.error("AI Summary Error:", error);
+                dom.summaryContent.innerHTML = `<p class="text-danger-600 font-medium">เกิดข้อผิดพลาดในการสรุปผล:</p><p class="text-sm text-slate-600 mt-2">${error.message}</p><button onclick="window.hideSummaryModal()" class="w-full bg-slate-200 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-300 transition text-sm mt-6">ปิด</button>`;
+            } finally {
+                dom.summaryLoading.classList.add('hidden');
+                dom.summaryContent.classList.remove('hidden');
+            }
+        };
+
+        window.renderSummaryModal = (data) => {
+            dom.summaryGreeting.textContent = data.greeting;
+            dom.summaryFocusList.innerHTML = data.focusPoints.map(point => 
+                `<li><i class="fa-solid fa-check-double fa-fw"></i><span>${escapeHTML(point)}</span></li>`
+            ).join('');
+            dom.summaryOverview.textContent = data.overview;
+        };
+
+
+        // --- Add Modal Handlers ---
+        window.showAddModal = () => {
+            dom.addModalContainer.classList.remove('hidden');
+            dom.addTaskInput.focus();
+        };
+        window.hideAddModal = () => {
+            dom.addModalContainer.classList.add('hidden');
+            dom.addTaskInput.value = '';
+        };
+
+        // --- TASK EVENT HANDLERS (Smart Add, CRUD) ---
+        
+        function triggerPopAnimation(event) {
+            if (!event || !event.target) return;
+            const icon = event.target.closest('button')?.querySelector('i');
+            if (icon) {
+                icon.classList.add('animate-pop');
+                setTimeout(() => {
+                    if (icon) icon.classList.remove('animate-pop');
+                }, 200);
+            }
+        }
+
+        window.handleSmartAdd = async (event) => {
+            event.preventDefault();
+            if (state.isAiThinking) return;
+
+            const text = dom.addTaskInput.value.trim();
+            if (!text) return;
+            
+            setAiLoading(true);
+            const today = new Date().toLocaleDateString('sv-SE');
+            
+            const systemPrompt = `คุณคือผู้ช่วยจัดการ Task หน้าที่ของคุณคือสกัดข้อความของผู้ใช้ให้อยู่ในรูปแบบ JSON Array ที่กำหนดเท่านั้น
+ข้อเท็จจริง: วันนี้คือ ${today}.
+คำสั่ง:
+- "พรุ่งนี้" หมายถึง 1 วันหลังจากวันนี้
+- "9 โมง" -> "09:00", "บ่าย 2" -> "14:00"
+- ตีความ "priority": "ด่วน", "สำคัญ" -> "high"
+- ตีความ "notes": "รายละเอียด...", "โน้ต..." -> "..."
+- ถ้าไม่ระบุวันที่/เวลา/โน้ต ให้เป็น null
+- คุณต้องตอบเป็น JSON Array เท่านั้น ตาม Schema ที่กำหนด
+`;
+            
+            const generationConfig = {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            "text": { "type": "STRING" },
+                            "dueDate": { "type": "STRING", "description": "YYYY-MM-DD or null" },
+                            "dueTime": { "type": "STRING", "description": "HH:MM or null" },
+                            "priority": { "type": "STRING", "enum": ["high", "normal"] },
+                            "notes": { "type": "STRING", "description": "Notes or null" }
+                        },
+                        required: ["text", "dueDate", "dueTime", "priority", "notes"]
+                    }
+                }
+            };
+            
+            const payload = {
+                contents: [{ parts: [{ text }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: generationConfig
+            };
+            
+            const apiKey = geminiApiKey || ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) { 
+                    const errorData = await response.json(); 
+                    throw new Error(errorData.error?.message || "AI request failed"); 
+                }
+                
+                const result = await response.json();
+                const aiResponseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!aiResponseText) {
+                    throw new Error("AI response was empty.");
+                }
+
+                const newTasksData = JSON.parse(aiResponseText);
+                let addedCount = 0;
+                
+                newTasksData.forEach(taskData => {
+                    const newTask = {
+                        id: Date.now() + addedCount, 
+                        text: taskData.text,
+                        completed: false,
+                        priority: taskData.priority || 'normal',
+                        dueDate: taskData.dueDate || null,
+                        dueTime: taskData.dueTime || null,
+                        notes: taskData.notes || ""
+                    };
+                    state.tasks.push(newTask);
+                    addedCount++;
+                });
+                
+                if (addedCount > 0) {
+                    saveAndRender(); // [v17] Use new save function
+                    window.hideAddModal();
+                    showToast(`AI เพิ่ม ${addedCount} รายการแล้ว`, 'success');
+                }
+
+            } catch (error) {
+                console.error("AI Smart Add Error:", error);
+                showToast(`AI Error: ${error.message}`, 'error');
+                addBasicTask(text); 
+            } finally {
+                setAiLoading(false);
+            }
+        };
+        
+        function addBasicTask(text) {
+             const newTask = { 
+                 id: Date.now(), text: text, completed: false, 
+                 priority: 'normal', dueDate: null, dueTime: null, notes: "" 
+            };
+            state.tasks.push(newTask);
+            saveAndRender(); // [v17] Use new save function
+            window.hideAddModal();
+            showToast('เพิ่มรายการ (แบบธรรมดา) แล้ว', 'success');
+        }
+
+        function setAiLoading(isLoading) {
+            state.isAiThinking = isLoading;
+            if (isLoading) {
+                dom.addTaskIcon.classList.add('scale-0');
+                dom.addTaskLoader.classList.remove('hidden');
+                dom.addTaskLoader.classList.add('flex');
+                dom.addTaskInput.disabled = true;
+            } else {
+                dom.addTaskIcon.classList.remove('scale-0');
+                dom.addTaskLoader.classList.add('hidden');
+                dom.addTaskLoader.classList.remove('flex');
+                dom.addTaskInput.disabled = false;
+            }
+        }
+        
+        window.toggleTask = (id, event) => {
+            if (event) {
+                event.stopPropagation(); 
+                triggerPopAnimation(event); 
+            }
+            const task = state.tasks.find(t => t.id === id);
+            if (task) { 
+                task.completed = !task.completed; 
+                saveAndRender(); // [v17] Use new save function
+                if (state.viewingTaskId === id) {
+                    window.showDetailModal(id); // Refresh detail modal if open
+                }
+            }
+        };
+
+        window.togglePriority = (id, event) => {
+            if (event) {
+                event.stopPropagation();
+                triggerPopAnimation(event); 
+            }
+            const task = state.tasks.find(t => t.id === id);
+            if (task) { 
+                task.priority = task.priority === 'high' ? 'normal' : 'high'; 
+                saveAndRender(); // [v17] Use new save function
+            }
+        };
+
+        // --- Delete Confirmation Functions ---
+        
+        window.showDeleteConfirmModal = (id, event) => {
+            if (event) event.stopPropagation();
+            const task = state.tasks.find(t => t.id === id);
+            if (!task) return;
+
+            state.deletingTaskId = id;
+            dom.deleteTaskName.textContent = `"${task.text}"`;
+            dom.deleteConfirmModalContainer.classList.remove('hidden');
+        };
+
+        window.hideDeleteConfirmModal = () => {
+            dom.deleteConfirmModalContainer.classList.add('hidden');
+            state.deletingTaskId = null;
+            dom.deleteTaskName.textContent = '';
+        };
+
+        window.handleConfirmDelete = () => {
+            if (state.deletingTaskId === null) return;
+            
+            const taskIndex = state.tasks.findIndex(t => t.id === state.deletingTaskId);
+            if (taskIndex > -1) {
+                lastDeletedTask = state.tasks.splice(taskIndex, 1)[0]; 
+                saveAndRender(); // [v17] Use new save function
+                showToast('ลบแล้ว', 'error', true); 
+            }
+            
+            window.hideDeleteConfirmModal();
+        };
+        
+        window.undoDelete = () => {
+            if (undoTimeout) clearTimeout(undoTimeout);
+            if (lastDeletedTask) {
+                state.tasks.push(lastDeletedTask);
+                lastDeletedTask = null; 
+                saveAndRender(); // [v17] Use new save function
+                hideToast();
+                showToast('กู้คืนแล้ว', 'success');
+            }
+        };
+        
+        window.changeFilter = (newFilter, index) => {
+            state.filter = newFilter;
+            renderTasks();
+            dom.filterViewBg.style.transform = `translateX(calc(${index * 100}% + ${index * 4}px))`;
+            const items = dom.filterViewBg.parentElement.querySelectorAll('.segmented-item');
+            items.forEach(item => item.classList.remove('active'));
+            items[index].classList.add('active');
+        };
+
+        // --- Detail Modal Handlers ---
+        window.showDetailModal = (id) => {
+            if (!dom.calendarSheetModalContainer.classList.contains('hidden')) {
+                window.hideCalendarSheetModal();
+            }
+
+            const task = state.tasks.find(t => t.id === id);
+            if (!task) return;
+
+            state.viewingTaskId = id;
+            
+            dom.detailViewText.textContent = task.text;
+            dom.detailViewText.className = "text-base font-semibold text-slate-700"; 
+            
+            dom.detailViewDate.textContent = task.dueDate ? new Date(task.dueDate + 'T00:00:00').toLocaleDateString('th-TH', { dateStyle: 'long' }) : 'ไม่ได้ตั้งค่า';
+            dom.detailViewPriority.textContent = task.priority === 'high' ? 'สำคัญ' : 'ปกติ';
+            dom.detailViewNotes.textContent = task.notes || '(ไม่มี)';
+            
+            if (task.dueTime) {
+                dom.detailViewTime.textContent = task.dueTime;
+                dom.detailViewTimeRow.classList.remove('hidden');
+            } else {
+                dom.detailViewTime.textContent = '';
+                dom.detailViewTimeRow.classList.add('hidden');
+            }
+
+            const checkboxIcon = task.completed
+                ? 'fa-solid fa-square-check text-accent-500 hover:text-accent-600'
+                : 'fa-regular fa-square text-slate-400 hover:text-brand-500';
+            dom.detailToggleCompleteBtn.innerHTML = `<i class="${checkboxIcon}"></i>`;
+            dom.detailToggleCompleteBtn.onclick = () => window.toggleTask(id, null);
+
+            dom.detailEditText.value = task.text;
+            dom.detailEditDate.value = task.dueDate;
+            dom.detailEditTime.value = task.dueTime;
+            dom.detailEditPriority.value = task.priority;
+            dom.detailEditNotes.value = task.notes;
+
+            window.toggleDetailEdit(false); 
+            dom.taskDetailModalContainer.classList.remove('hidden');
+        };
+        
+        window.hideDetailModal = () => {
+            dom.taskDetailModalContainer.classList.add('hidden');
+            state.viewingTaskId = null;
+        };
+
+        window.toggleDetailEdit = (isEditing) => {
+            if (isEditing) {
+                dom.detailViewContent.classList.add('hidden');
+                dom.detailEditForm.classList.remove('hidden');
+            } else {
+                dom.detailViewContent.classList.remove('hidden');
+                dom.detailEditForm.classList.add('hidden');
+            }
+        };
+
+        window.handleSaveDetailEdit = (event) => {
+            event.preventDefault();
+            if (!state.viewingTaskId) return;
+            
+            const task = state.tasks.find(t => t.id === state.viewingTaskId);
+            if (!task) return;
+
+            task.text = dom.detailEditText.value.trim();
+            task.dueDate = dom.detailEditDate.value || null;
+            task.dueTime = dom.detailEditTime.value || null;
+            task.priority = dom.detailEditPriority.value;
+            task.notes = dom.detailEditNotes.value.trim();
+
+            saveAndRender(); // [v17] Use new save function
+            
+            window.showDetailModal(task.id); 
+            window.toggleDetailEdit(false); 
+            showToast('บันทึกการแก้ไขแล้ว', 'success');
+        };
+
+        
+        // --- Settings Handlers ---
+        window.handleSaveSettings = () => {
+            geminiApiKey = dom.inputApiKey.value.trim(); 
+            gasUrl = dom.inputGasUrl.value.trim();
+            localStorage.setItem('todo_api_key_v17', geminiApiKey); // Updated key
+            localStorage.setItem('todo_gas_url_v17', gasUrl); // Updated key
+            showToast('บันทึกการตั้งค่าแล้ว', 'success');
+        };
+        function loadSettings() {
+            geminiApiKey = localStorage.getItem('todo_api_key_v17') || ''; // Updated key
+            gasUrl = localStorage.getItem('todo_gas_url_v17') || ''; // Updated key
+        }
+        
+        // --- Google Sheet Sync ---
+        window.triggerAutoSync = async () => {
+            if (!gasUrl) return; 
+            console.log("Auto-syncing to Google Sheet...");
+            try {
+                const payload = JSON.stringify(state.tasks);
+                const response = await fetch(gasUrl, {
+                    method: 'POST', mode: 'cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: payload
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    console.log(`Auto-sync successful: ${result.rows_synced} rows.`);
+                } else { throw new Error(result.message || "Unknown error"); }
+            } catch (error) { console.error("GSheet Auto-Sync Error:", error); }
+        };
+
+        // --- CHAT AI LOGIC ---
+        
+        function renderChatHistory() {
+            dom.chatMessageContainer.innerHTML = state.chatHistory.map(msg => {
+                if (msg.role === 'user') {
+                    return `<div class="chat-bubble chat-bubble-user">${escapeHTML(msg.text)}</div>`;
+                } else {
+                    return `<div class="chat-bubble chat-bubble-ai">
+                                <i class="fa-solid fa-robot fa-fw"></i>
+                                <span>${escapeHTML(msg.text)}</span>
+                            </div>`;
+                }
+            }).join('');
+            
+            if (state.isChatAiThinking) {
+                addTypingIndicator();
+            }
+            scrollToChatBottom();
+        }
+
+        function addMessageToChat(role, text) {
+            state.chatHistory.push({ role, text });
+            saveChatHistory(); // [v17] Use new save function
+            renderChatHistory(); 
+        }
+
+        window.sendChatMessage = async (event) => {
+            event.preventDefault();
+            if (state.isChatAiThinking) return; 
+            
+            const userMessage = dom.chatInput.value.trim();
+            if (!userMessage) return; 
+            
+            state.isChatAiThinking = true;
+            dom.chatInput.value = '';
+            dom.chatInput.style.height = 'auto'; 
+            dom.chatInput.disabled = true; 
+            dom.chatSendBtn.disabled = true; 
+            
+            addMessageToChat('user', userMessage); 
+            addTypingIndicator(); 
+
+            const todayISO = new Date().toLocaleDateString('sv-SE');
+            const systemPrompt = `
+คุณคือ 'AI ผู้ช่วยจัดการ To-Do List' (v17)
+หน้าที่ของคุณคือช่วยผู้ใช้จัดการรายการ Task ของพวกเขา
+ข้อเท็จจริง:
+- วันนี้คือวันที่ ${todayISO}
+- Task ที่มีอยู่จะต้องคง 'id' เดิมไว้เสมอ
+- Task ใหม่ที่สร้างขึ้น ควรมี 'id' เป็น timestamp (เช่น Date.now())
+- Task object มี field: id, text, completed, priority, dueDate, dueTime, notes
+
+กฎการตอบ (สำคัญมาก):
+คุณต้องตอบกลับเป็น JSON เท่านั้น โดยมี 1 ใน 2 รูปแบบนี้:
+
+1.  **ถ้าผู้ใช้ "สั่งการ" (เช่น "เพิ่ม", "ลบ", "แก้ไข")**
+    -> คุณต้องตอบกลับเป็น **JSON Array (ตาราง Tasks ใหม่)** ที่สมบูรณ์เท่านั้น
+    -> **สำคัญมาก: ต้องคง ID, dueTime, notes เดิมของ Task ที่ไม่ถูกแก้ไข**
+    -> หากผู้ใช้สั่ง "เพิ่ม" (เช่น "เพิ่มงาน... 9 โมง โน้ตว่า...") ให้คุณสร้าง object ใหม่พร้อม field ทั้งหมด
+    -> ห้ามมีข้อความอื่น ห้ามมี markdown (\`\`\`json)
+    -> Ex: [{ "id": 123, ... }, { "id": ${Date.now()}, "text": "Task ใหม่", "dueDate": "...", "dueTime": "09:00", "notes": "...", ... }]
+
+2.  **ถ้าผู้ใช้ "ถามคำถาม" (เช่น "ฉันมีงานกี่อย่าง?", "มีงานด่วนไหม?")**
+    -> คุณต้องตอบกลับเป็น **JSON Object ที่มี key "answer"** เท่านั้น
+    -> Ex: { "answer": "คุณมีรายการที่ยังไม่เสร็จ 5 รายการค่ะ โดยมีรายการด่วน 2 รายการ" }
+
+3.  **ถ้าคำสั่งไม่ชัดเจน** ให้ตอบแบบ 2 (ถามกลับ)
+    -> Ex: { "answer": "คุณต้องการให้ลบรายการไหน กรุณาระบุค่ะ" }
+`;
+            
+            const recentChat = state.chatHistory.slice(-5).map(m => `${m.role}: ${m.text}`).join('\n');
+            const userQuery = `
+Tasks ปัจจุบัน (JSON):
+${JSON.stringify(state.tasks)}
+
+ประวัติแชทล่าสุด:
+${recentChat}
+
+คำสั่งใหม่จากผู้ใช้:
+user: "${userMessage}"
+`;
+            
+            const apiKey = geminiApiKey || "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents: [{ parts: [{ text: userQuery }] }],
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    throw new Error(errorBody.error?.message || `HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (text) {
+                    removeTypingIndicator(); 
+                    processAIResponse(text); 
+                } else {
+                    throw new Error("AI ไม่ได้ส่งข้อมูลตารางเวรกลับมา");
+                }
+
+            } catch (error) {
+                console.error("AI Generation Error:", error);
+                removeTypingIndicator(); 
+                const errorMsg = `AI Error: ${error.message}`;
+                addMessageToChat('ai', errorMsg);
+                showToast(errorMsg, 'error');
+            } finally {
+                state.isChatAiThinking = false;
+                dom.chatInput.disabled = false;
+                dom.chatSendBtn.disabled = false;
+                dom.chatInput.focus();
+            }
+        };
+
+        function processAIResponse(jsonString) {
+            try {
+                const cleanJsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+                const aiData = JSON.parse(cleanJsonString);
+                
+                if (Array.isArray(aiData)) { 
+                    const oldLength = state.tasks.length;
+                    const newLength = aiData.length;
+                    
+                    aiData.forEach(task => {
+                        if (task.dueTime === undefined) task.dueTime = null;
+                        if (task.notes === undefined) task.notes = "";
+                    });
+                    
+                    state.tasks = aiData; 
+                    
+                    saveAndRender(); // [v17] Use new save function
+                    
+                    let summaryMsg = "ดำเนินการเรียบร้อยค่ะ";
+                    if (newLength > oldLength) summaryMsg = `ฉันเพิ่ม ${newLength - oldLength} รายการ และอัปเดต Task ให้แล้วค่ะ`;
+                    else if (newLength < oldLength) summaryMsg = `ฉันลบ ${oldLength - newLength} รายการ และอัปเดต Task ให้แล้วค่ะ`;
+                    else if (oldLength === newLength && oldLength > 0) summaryMsg = "ฉันอัปเดต Task ให้แล้วค่ะ";
+
+                    addMessageToChat('ai', summaryMsg);
+                    showToast(summaryMsg, 'success');
+                    
+                } else if (typeof aiData === 'object' && aiData !== null && aiData.answer) {
+                    addMessageToChat('ai', aiData.answer);
+                } else {
+                    throw new Error("AI response is not a valid Array or Answer Object.");
+                }
+            } catch (error) {
+                console.error("AI Response Parse Error:", error);
+                if (!jsonString.startsWith('[') && !jsonString.startsWith('{')) {
+                    addMessageToChat('ai', jsonString);
+                } else {
+                    const errorMsg = `AI Error: ${error.message} (AI ตอบกลับ: ${jsonString})`;
+                    addMessageToChat('ai', errorMsg);
+                    showToast('AI ตอบกลับในรูปแบบที่ผิดพลาด', 'error');
+                }
+            }
+        }
+        
+        function addTypingIndicator() {
+            if (document.getElementById('ai-typing-indicator')) return; 
+            const bubble = document.createElement('div');
+            bubble.id = 'ai-typing-indicator';
+            bubble.className = 'chat-bubble chat-bubble-ai-typing';
+            bubble.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
+            dom.chatMessageContainer.appendChild(bubble);
+            scrollToChatBottom();
+        }
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('ai-typing-indicator');
+            if (indicator) indicator.remove();
+        }
+        function scrollToChatBottom() {
+            dom.chatMessageContainer.scrollTop = dom.chatMessageContainer.scrollHeight;
+        }
+
+        // --- UTILS ---
+        let toastTimeout = null;
+        function showToast(msg, type='success', showUndo = false) {
+            clearTimeout(toastTimeout);
+            clearTimeout(undoTimeout); 
+            
+            dom.toastMsg.textContent = msg;
+            dom.toastIcon.className = (type === 'success' 
+                ? `fa-solid fa-check-circle text-emerald-400` 
+                : `fa-solid fa-times-circle text-red-400`);
+            
+            if (showUndo && lastDeletedTask) {
+                dom.toastUndoBtn.classList.remove('hidden');
+                dom.toast.classList.add('pointer-events-auto'); 
+                undoTimeout = setTimeout(() => { lastDeletedTask = null; }, 5000); 
+            } else {
+                dom.toastUndoBtn.classList.add('hidden');
+                dom.toast.classList.remove('pointer-events-auto');
+            }
+
+            dom.toast.classList.remove('opacity-0', 'translate-y-[-20px]');
+            dom.toast.classList.add('opacity-100', 'translate-y-0');
+            
+            if (!showUndo) {
+                toastTimeout = setTimeout(() => { hideToast(); }, 3000); 
+            }
+        }
+        function hideToast() {
+            dom.toast.classList.remove('opacity-100', 'translate-y-0');
+            dom.toast.classList.add('opacity-0', 'translate-y-[-20px]');
+            dom.toastUndoBtn.classList.add('hidden');
+            dom.toast.classList.remove('pointer-events-auto');
+        }
+        function escapeHTML(str) {
+            if (!str) return ""; 
+            return str.replace(/[&<>"']/g, function(match) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
+            });
+        }
+
+        // --- Start App ---
+        initApp();
+    </script>
+</body>
+</html>
