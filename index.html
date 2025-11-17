@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
 
-    <title>To-Do List App (v18 - GAS API Key)</title>
+    <title>To-Do List App (v19 - ฝัง GAS URL)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -880,8 +880,8 @@
                             <input type="password" id="input-api-key" class="form-input" placeholder="หากเว้นว่าง จะใช้ Key เริ่มต้นจากระบบ">
                         </div>
                         <div>
-                            <label for="input-gas-url" class="form-label">Google Apps Script URL (สำหรับ Sync)</label>
-                            <input type="url" id="input-gas-url" class="form-input" placeholder="https://script.google.com/macros/s/...">
+                            <label for="input-gas-url" class="form-label">Google Apps Script URL (ทับค่าเริ่มต้น)</label>
+                            <input type="url" id="input-gas-url" class="form-input" placeholder="หากเว้นว่าง จะใช้ URL ที่ฝังมากับไฟล์">
                         </div>
                         <button onclick="window.handleSaveSettings()" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl hover:bg-brand-700 transition text-sm">
                             <i class="fa-solid fa-save mr-2"></i> บันทึกการตั้งค่า
@@ -941,9 +941,16 @@ function doGet(e) {
         // --- CHANGELOG (for automatic guide updates) ---
         const CHANGELOG = [
              { 
+                version: "v19 (ฝัง GAS URL)", 
+                features: [
+                    "ฝัง URL ของ Google Apps Script ไว้ในไฟล์ HTML โดยตรง",
+                    "ผู้ใช้ไม่ต้องตั้งค่า URL เองในหน้า Settings อีกต่อไป",
+                    "ยังคงสามารถ override URL ได้ในหน้า Settings"
+                ] 
+            },
+            { 
                 version: "v18 (GAS API Key)", 
                 features: [
-                    "ปรับสถาปัตยกรรม Key",
                     "ดึง API Key เริ่มต้นจาก Google Apps Script (doGet)",
                     "ผู้ใช้สามารถกรอก Key ของตัวเองทับ (Override) ได้"
                 ] 
@@ -953,13 +960,6 @@ function doGet(e) {
                 features: [
                     "เปลี่ยนระบบจัดเก็บข้อมูลกลับไปเป็น LocalStorage",
                     "แอปสามารถทำงาน Offline ได้ 100% (ยกเว้นฟีเจอร์ AI)"
-                ] 
-            },
-            { 
-                version: "v16", 
-                features: [
-                    "เพิ่มฟีเจอร์ 'AI สรุปงาน' (Daily Briefing)",
-                    "AI จะวิเคราะห์และสรุปงานสำคัญให้คุณอัตโนมัติ"
                 ] 
             }
         ];
@@ -980,7 +980,18 @@ function doGet(e) {
         
         let lastDeletedTask = null;
         let undoTimeout = null;
-        let gasUrl = 'https://script.google.com/macros/s/AKfycbx8TL3nBpttv89k7ylSiwEts3_vBfhjuZpvmsiQFH9Snx0k_SCoZt5ZK_Z7eFJVEvSo/exec'; 
+        
+        // ===================================================================>
+        // ===================================================================>
+        // ========>   ใส่ URL ของคุณตรงนี้ครับ   <========
+        //
+        //    (ใส่ลิงก์ Google Apps Script URL ที่ Deploy แล้วของคุณที่นี่)
+        //
+        // ===================================================================>
+        // ===================================================================>
+        const HARDCODED_GAS_URL = "https://script.google.com/macros/s/AKfycbwVduhNMS3RVxorcpSdBKOWez4O-3dGoRChAYs7ByLIYiPywWEf9rjOqdrdtU1DWVx8/exec"; 
+        
+        let gasUrl = ''; // This will be set by loadSettings
         let geminiApiKey = ''; // *** นี่คือ Key ที่ "ผู้ใช้กรอก" (User-provided Key) ***
         let defaultGeminiApiKey = ''; // *** NEW: Key เริ่มต้นที่ดึงจาก GAS ***
 
@@ -1076,7 +1087,7 @@ function doGet(e) {
         // --- INITIALIZATION ---
         // *** UPDATED: initApp
         async function initApp() {
-            loadSettings(); // โหลด Key ที่ผู้ใช้กรอก (geminiApiKey) และ gasUrl จาก localStorage
+            loadSettings(); // โหลด Key ที่ผู้ใช้กรอก (geminiApiKey) และ gasUrl (ที่อาจจะ override)
             
             // NEW: ดึง Key เริ่มต้นจาก GAS
             await fetchDefaultApiKey(); 
@@ -1485,7 +1496,16 @@ function doGet(e) {
 
         function renderSettings() {
             dom.inputApiKey.value = geminiApiKey; // แสดง Key ที่ผู้ใช้กรอก
-            dom.inputGasUrl.value = gasUrl;
+            
+            // *** UPDATED LOGIC ***
+            // ถ้า URL ที่ใช้อยู่ คือ URL ที่ฝังมา (hard-coded) ให้ช่องแสดงเป็นค่าว่าง
+            // ถ้า URL ที่ใช้อยู่ มาจากที่ผู้ใช้กรอก (localStorage) ให้แสดงค่านั้น
+            const savedGasUrl = localStorage.getItem('todo_gas_url_v17');
+            if (savedGasUrl !== null) {
+                dom.inputGasUrl.value = savedGasUrl;
+            } else {
+                dom.inputGasUrl.value = ''; // แสดงเป็นค่าว่าง (placeholder จะโชว์)
+            }
         }
         
         // --- Guide Modal Functions ---
@@ -1946,25 +1966,50 @@ function doGet(e) {
         // --- Settings Handlers ---
         window.handleSaveSettings = () => {
             geminiApiKey = dom.inputApiKey.value.trim(); // นี่คือ Key ที่ผู้ใช้กรอก
-            gasUrl = dom.inputGasUrl.value.trim();
-            localStorage.setItem('todo_api_key_v17', geminiApiKey); // บันทึก Key ผู้ใช้
-            localStorage.setItem('todo_gas_url_v17', gasUrl); // บันทึก GAS URL
+            gasUrl = dom.inputGasUrl.value.trim(); // นี่คือ URL ที่ผู้ใช้กรอก
+            
+            // *** UPDATED LOGIC ***
+            // บันทึกสิ่งที่ผู้ใช้กรอกลง localStorage (แม้ว่าจะเป็นค่าว่าง)
+            // เพื่อให้แอป "จำ" ได้ว่าผู้ใช้ต้องการ override
+            localStorage.setItem('todo_api_key_v17', geminiApiKey); 
+            localStorage.setItem('todo_gas_url_v17', gasUrl); 
+            
             showToast('บันทึกการตั้งค่าแล้ว', 'success');
             
             // ถ้าผู้ใช้เคลียร์ Key ของตัวเอง, เราควรดึง Key เริ่มต้นใหม่
             if (!geminiApiKey) {
                 fetchDefaultApiKey();
             }
+            
+            // ถ้าผู้ใช้เคลียร์ URL ของตัวเอง, ให้กลับไปใช้ค่าที่ฝังมา
+            if (!gasUrl) {
+                gasUrl = HARDCODED_GAS_URL;
+                // และถ้า Key ของผู้ใช้ก็ว่างด้วย, ให้ดึง Key เริ่มต้นใหม่ (เพราะ URL เปลี่ยนแล้ว)
+                if(!geminiApiKey) {
+                    fetchDefaultApiKey();
+                }
+            }
         };
+        
+        // *** UPDATED loadSettings ***
         function loadSettings() {
             geminiApiKey = localStorage.getItem('todo_api_key_v17') || ''; // โหลด Key ที่ผู้ใช้กรอก
-            gasUrl = localStorage.getItem('todo_gas_url_v17') || ''; // โหลด GAS URL
+
+            const savedGasUrl = localStorage.getItem('todo_gas_url_v17');
+            
+            // ถ้า `savedGasUrl` ไม่ใช่ `null` (หมายถึงผู้ใช้เคยบันทึกค่าใน Settings แล้ว แม้ว่าจะเป็นค่าว่าง)
+            if (savedGasUrl !== null) {
+                gasUrl = savedGasUrl;
+            } else {
+                // ถ้าเป็น `null` (ผู้ใช้ไม่เคยยุ่งกับช่องนี้) ให้ใช้ค่าที่ฝังมา
+                gasUrl = HARDCODED_GAS_URL;
+            }
         }
         
         // --- NEW FUNCTION: Fetch Default API Key ---
         async function fetchDefaultApiKey() {
-            if (!gasUrl) {
-                console.log("GAS URL not set. Skipping fetch for default API key.");
+            if (!gasUrl || gasUrl === "YOUR_GOOGLE_APPS_SCRIPT_URL_GOES_HERE") {
+                console.log("GAS URL not set or is placeholder. Skipping fetch for default API key.");
                 return;
             }
             
@@ -2004,7 +2049,7 @@ function doGet(e) {
 
         // --- Google Sheet Sync ---
         window.triggerAutoSync = async () => {
-            if (!gasUrl) return; 
+            if (!gasUrl || gasUrl === "YOUR_GOOGLE_APPS_SCRIPT_URL_GOES_HERE") return; 
             console.log("Auto-syncing to Google Sheet...");
             try {
                 const payload = JSON.stringify(state.tasks);
@@ -2113,7 +2158,7 @@ user: "${userMessage}"
             };
             
             if (!apiKeyToUse) {
-                 addMessageToChat('ai', 'เกิดข้อผิดพลาด: ไม่ได้ตั้งค่า API Key กรุณาตั้งค่าในหน้า Settings');
+                 addMessageToChat('ai', 'เกิดข้อผิดพลาด: ไม่ได้ตั้งค่า API Key กรุณาตั้งค่าในหน้า Settings หรือตรวจสอบ URL ของ Apps Script');
                  state.isChatAiThinking = false;
                  dom.chatInput.disabled = false;
                  dom.chatSendBtn.disabled = false;
